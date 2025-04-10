@@ -1,7 +1,7 @@
 
 import React from "react";
 import { Slider } from "@/components/ui/slider";
-import { InfoCircle, HelpCircle } from "lucide-react";
+import { HelpCircle } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
