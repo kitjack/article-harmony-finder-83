@@ -3,7 +3,7 @@ import React from "react";
 import { DuplicatePair } from "@/utils/fuzzyMatchUtils";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
-import { ArticleData } from "@/utils/csvUtils";
+import DeduplicationStats from "./DeduplicationStats";
 
 interface ResultsTableProps {
   duplicates: DuplicatePair[];
@@ -24,6 +24,11 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
 
   return (
     <div className="mt-8">
+      <DeduplicationStats 
+        totalArticles={totalArticles} 
+        duplicates={duplicates} 
+      />
+
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-xl font-semibold">Duplicate Results</h2>
