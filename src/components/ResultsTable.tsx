@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from "react";
 import { DuplicatePair } from "@/utils/fuzzyMatchUtils";
 import { Button } from "@/components/ui/button";
@@ -28,7 +27,7 @@ interface ResultsTableProps {
   onDownloadOriginal: () => void;
   onDownloadDeduplicated: () => void;
   totalArticles: number;
-  allArticles?: ArticleData[]; // Added for showing all articles
+  allArticles?: ArticleData[];
 }
 
 type SortField = "title1" | "title2" | "similarity";
@@ -48,7 +47,6 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
 
-  // Filtered data based on view mode
   const filteredData = useMemo(() => {
     if (viewMode === "all" && allArticles.length > 0) {
       return { type: "articles", data: allArticles };
@@ -69,27 +67,24 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
     }
 
     if (viewMode === "clean") {
-      // For clean records, we need to find articles that aren't in duplicates
       if (allArticles.length > 0) {
-        const duplicateDois = new Set();
+        const uniqueArticlesInDuplicates = new Set<string>();
         duplicates.forEach(pair => {
-          duplicateDois.add(pair.article1.Doi);
-          duplicateDois.add(pair.article2.Doi);
+          uniqueArticlesInDuplicates.add(pair.article1.Doi);
+          uniqueArticlesInDuplicates.add(pair.article2.Doi);
         });
         
         return { 
           type: "articles", 
-          data: allArticles.filter(article => !duplicateDois.has(article.Doi)) 
+          data: allArticles.filter(article => !uniqueArticlesInDuplicates.has(article.Doi)) 
         };
       }
       return { type: "articles", data: [] };
     }
 
-    // Default to showing duplicates
     return { type: "duplicates", data: duplicates };
   }, [viewMode, duplicates, allArticles]);
 
-  // Sorted and paginated data
   const sortedData = useMemo(() => {
     let dataToSort = [...filteredData.data];
     
@@ -110,7 +105,6 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
         }
       });
     } else {
-      // Sorting for regular articles
       return (dataToSort as ArticleData[]).sort((a, b) => {
         return sortDirection === "asc" 
           ? a.Title.localeCompare(b.Title)
@@ -119,7 +113,6 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
     }
   }, [filteredData, sortField, sortDirection]);
 
-  // Pagination
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * rowsPerPage;
     return sortedData.slice(startIndex, startIndex + rowsPerPage);
@@ -127,13 +120,10 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
 
   const totalPages = Math.ceil(sortedData.length / rowsPerPage);
 
-  // Handle sort click
   const handleSort = (field: SortField) => {
     if (sortField === field) {
-      // Toggle sort direction if same field
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
-      // New field, set default to desc
       setSortField(field);
       setSortDirection("desc");
     }
@@ -146,13 +136,11 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
       : <ArrowDown className="h-4 w-4" />;
   };
 
-  // Handle view mode change when statistic cards are clicked
   const handleViewModeChange = (mode: ViewMode) => {
     setViewMode(mode);
-    setCurrentPage(1); // Reset pagination
+    setCurrentPage(1);
   };
 
-  // Handle download for specific view modes
   const handleDownloadView = () => {
     if (filteredData.data.length === 0) return;
     
@@ -160,7 +148,6 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
     let filename = "";
     
     if (filteredData.type === "duplicates") {
-      // Create a flattened array of duplicate pairs
       csvData = (filteredData.data as DuplicatePair[]).map(pair => ({
         "Title 1": pair.article1.Title,
         "Doi 1": pair.article1.Doi,
@@ -177,7 +164,6 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
         filename = "duplicate-articles.csv";
       }
     } else {
-      // For regular articles (all or clean)
       csvData = filteredData.data as ArticleData[];
       filename = viewMode === "clean" ? "clean-records.csv" : "all-articles.csv";
     }
@@ -185,11 +171,6 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
     downloadCSV(csvData, filename);
   };
 
-  if (duplicates.length === 0 && viewMode !== "all") {
-    return null;
-  }
-
-  // Get title for the current view
   const getViewTitle = () => {
     switch (viewMode) {
       case "all": return "All Articles";
@@ -200,7 +181,6 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
     }
   };
 
-  // Get download button text for current view
   const getDownloadButtonText = () => {
     switch (viewMode) {
       case "all": return "Download All Articles";
@@ -211,7 +191,6 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
     }
   };
 
-  // Get icon for download button based on view
   const getDownloadIcon = () => {
     switch (viewMode) {
       case "all": return <FileText className="h-4 w-4" />;
@@ -221,6 +200,10 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
       default: return <Download className="h-4 w-4" />;
     }
   };
+
+  if (duplicates.length === 0 && viewMode !== "all") {
+    return null;
+  }
 
   return (
     <div className="mt-8">
@@ -369,7 +352,6 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
         </div>
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <Pagination className="mt-4">
           <PaginationContent>
