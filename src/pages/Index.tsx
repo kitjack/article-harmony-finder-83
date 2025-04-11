@@ -160,6 +160,7 @@ const Index: React.FC = () => {
             onDownloadOriginal={handleDownloadDuplicates}
             onDownloadDeduplicated={handleDownloadDeduplicated}
             totalArticles={articles.length}
+            allArticles={articles}
           />
           
           <CSVFormatGuide onDownloadSample={handleDownloadSample} />
