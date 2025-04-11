@@ -26,8 +26,15 @@ const DeduplicationStats: React.FC<DeduplicationStatsProps> = ({
   // Count fuzzy duplicates (not 100% similarity)
   const fuzzyDuplicates = duplicates.filter((pair) => pair.similarity < 100).length;
   
-  // Clean records = total - (pairs that would be removed)
-  const cleanRecords = totalArticles - duplicates.length;
+  // Create a set of DOIs that are in duplicate pairs
+  const duplicateDois = new Set<string>();
+  duplicates.forEach(pair => {
+    duplicateDois.add(pair.article1.Doi);
+    duplicateDois.add(pair.article2.Doi);
+  });
+  
+  // Clean records = total - unique DOIs in duplicates
+  const cleanRecords = totalArticles - duplicateDois.size;
 
   const createCardClass = (mode: ViewMode) => {
     return cn(

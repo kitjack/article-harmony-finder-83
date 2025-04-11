@@ -2,9 +2,9 @@
 import React, { useState, useMemo } from "react";
 import { DuplicatePair } from "@/utils/fuzzyMatchUtils";
 import { Button } from "@/components/ui/button";
-import { Download, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Download, ArrowUpDown, ArrowUp, ArrowDown, FileText, Copy, FileSearch, CheckCircle } from "lucide-react";
 import DeduplicationStats from "./DeduplicationStats";
-import { ArticleData } from "@/utils/csvUtils";
+import { ArticleData, downloadCSV } from "@/utils/csvUtils";
 import {
   Pagination,
   PaginationContent,
@@ -152,6 +152,39 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
     setCurrentPage(1); // Reset pagination
   };
 
+  // Handle download for specific view modes
+  const handleDownloadView = () => {
+    if (filteredData.data.length === 0) return;
+    
+    let csvData: any[] = [];
+    let filename = "";
+    
+    if (filteredData.type === "duplicates") {
+      // Create a flattened array of duplicate pairs
+      csvData = (filteredData.data as DuplicatePair[]).map(pair => ({
+        "Title 1": pair.article1.Title,
+        "Doi 1": pair.article1.Doi,
+        "Title 2": pair.article2.Title,
+        "Doi 2": pair.article2.Doi,
+        "Similarity": `${pair.similarity}%`
+      }));
+      
+      if (viewMode === "exact") {
+        filename = "exact-duplicates.csv";
+      } else if (viewMode === "fuzzy") {
+        filename = "fuzzy-duplicates.csv";
+      } else {
+        filename = "duplicate-articles.csv";
+      }
+    } else {
+      // For regular articles (all or clean)
+      csvData = filteredData.data as ArticleData[];
+      filename = viewMode === "clean" ? "clean-records.csv" : "all-articles.csv";
+    }
+    
+    downloadCSV(csvData, filename);
+  };
+
   if (duplicates.length === 0 && viewMode !== "all") {
     return null;
   }
@@ -164,6 +197,28 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
       case "fuzzy": return "Fuzzy Duplicates";
       case "clean": return "Clean Records";
       default: return "Duplicate Results";
+    }
+  };
+
+  // Get download button text for current view
+  const getDownloadButtonText = () => {
+    switch (viewMode) {
+      case "all": return "Download All Articles";
+      case "exact": return "Download Exact Duplicates";
+      case "fuzzy": return "Download Fuzzy Duplicates";
+      case "clean": return "Download Clean Records";
+      default: return "Download Duplicates";
+    }
+  };
+
+  // Get icon for download button based on view
+  const getDownloadIcon = () => {
+    switch (viewMode) {
+      case "all": return <FileText className="h-4 w-4" />;
+      case "exact": return <Copy className="h-4 w-4" />;
+      case "fuzzy": return <FileSearch className="h-4 w-4" />;
+      case "clean": return <CheckCircle className="h-4 w-4" />;
+      default: return <Download className="h-4 w-4" />;
     }
   };
 
@@ -181,22 +236,24 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
           <h2 className="text-xl font-semibold">{getViewTitle()}</h2>
           <p className="text-gray-600">
             {viewMode === "duplicates" && `Found ${duplicates.length} potential duplicate${duplicates.length !== 1 ? "s" : ""} out of ${totalArticles} articles`}
-            {viewMode === "exact" && `Found ${paginatedData.length} exact duplicate${paginatedData.length !== 1 ? "s" : ""}`}
+            {viewMode === "exact" && `Found ${sortedData.length} exact duplicate${sortedData.length !== 1 ? "s" : ""}`}
             {viewMode === "fuzzy" && `Found ${sortedData.length} fuzzy duplicate${sortedData.length !== 1 ? "s" : ""}`}
             {viewMode === "clean" && `${sortedData.length} clean record${sortedData.length !== 1 ? "s" : ""}`}
             {viewMode === "all" && `Showing ${sortedData.length} article${sortedData.length !== 1 ? "s" : ""}`}
           </p>
         </div>
-        {viewMode === "duplicates" && (
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              className="flex items-center gap-2"
-              onClick={onDownloadOriginal}
-            >
-              <Download className="h-4 w-4" />
-              <span>Download Duplicates</span>
-            </Button>
+        
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex items-center gap-2"
+            onClick={handleDownloadView}
+          >
+            {getDownloadIcon()}
+            <span>{getDownloadButtonText()}</span>
+          </Button>
+          
+          {viewMode === "duplicates" && (
             <Button
               className="flex items-center gap-2 bg-app-blue hover:bg-app-blue-dark"
               onClick={onDownloadDeduplicated}
@@ -204,8 +261,8 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
               <Download className="h-4 w-4" />
               <span>Download Deduplicated</span>
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="rounded-lg border overflow-hidden">

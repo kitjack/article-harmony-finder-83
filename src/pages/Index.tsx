@@ -9,6 +9,8 @@ import DuplicateArticlesButton from "@/components/DuplicateArticlesButton";
 import Header from "@/components/Header";
 import { ArticleData, downloadCSV, generateSampleCSV } from "@/utils/csvUtils";
 import { DuplicatePair, findDuplicates, deduplicate } from "@/utils/fuzzyMatchUtils";
+import { Button } from "@/components/ui/button";
+import { Download } from "lucide-react";
 
 const Index: React.FC = () => {
   const [articles, setArticles] = useState<ArticleData[]>([]);
@@ -130,6 +132,19 @@ const Index: React.FC = () => {
         <div className="bg-white rounded-xl shadow-lg p-6 md:p-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Upload Your CSV File</h2>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex items-center gap-1"
+                  onClick={handleDownloadSample}
+                >
+                  <Download className="h-4 w-4" />
+                  Sample CSV
+                </Button>
+              </div>
+              
               <FileUpload 
                 onFileLoaded={handleFileLoaded} 
                 onError={handleError} 
