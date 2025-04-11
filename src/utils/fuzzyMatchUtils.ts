@@ -1,3 +1,4 @@
+
 import Fuse from "fuse.js";
 import { ArticleData } from "./csvUtils";
 
@@ -59,10 +60,10 @@ export const deduplicate = (
   data: ArticleData[],
   duplicates: DuplicatePair[]
 ): ArticleData[] => {
-  // Create a set of DOIs to remove
+  // Create a set of DOIs to remove (only article2 from each pair)
   const doisToRemove = new Set<string>();
   
-  // For each duplicate pair, keep the first article and mark the second for removal
+  // For each duplicate pair, mark the second article for removal
   for (const pair of duplicates) {
     doisToRemove.add(pair.article2.Doi);
   }

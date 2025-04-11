@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from "react";
 import { DuplicatePair } from "@/utils/fuzzyMatchUtils";
 import { Button } from "@/components/ui/button";
@@ -47,10 +48,11 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
 
+  // This should only include the duplicate articles (the ones that would be removed)
   const duplicateDoiSet = useMemo(() => {
     const doiSet = new Set<string>();
     duplicates.forEach(pair => {
-      doiSet.add(pair.article1.Doi);
+      // We only add the second article (the one that would be removed in deduplication)
       doiSet.add(pair.article2.Doi);
     });
     return doiSet;

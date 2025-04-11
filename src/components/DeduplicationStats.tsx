@@ -27,17 +27,16 @@ const DeduplicationStats: React.FC<DeduplicationStatsProps> = ({
   const fuzzyDuplicates = duplicates.filter((pair) => pair.similarity < 100).length;
   
   // Create a set of unique articles that are in duplicate pairs
-  const uniqueArticlesInDuplicates = new Set<string>();
+  const articlesInDuplicates = new Set<string>();
   
-  // For each duplicate pair, collect both articles
+  // For each duplicate pair, we only add the second article (the one that would be removed)
+  // This correctly counts only the duplicate articles, not all articles involved in pairs
   duplicates.forEach(pair => {
-    uniqueArticlesInDuplicates.add(pair.article1.Doi);
-    uniqueArticlesInDuplicates.add(pair.article2.Doi);
+    articlesInDuplicates.add(pair.article2.Doi);
   });
   
-  // Clean records = total - duplicates involved in pairs
-  // This is the correct calculation - we're counting articles that aren't part of any duplicate pair
-  const cleanRecords = totalArticles - uniqueArticlesInDuplicates.size;
+  // Clean records = total - articles that are duplicates
+  const cleanRecords = totalArticles - articlesInDuplicates.size;
 
   const createCardClass = (mode: ViewMode) => {
     return cn(
