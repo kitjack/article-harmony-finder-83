@@ -47,6 +47,15 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
 
+  const duplicateDoiSet = useMemo(() => {
+    const doiSet = new Set<string>();
+    duplicates.forEach(pair => {
+      doiSet.add(pair.article1.Doi);
+      doiSet.add(pair.article2.Doi);
+    });
+    return doiSet;
+  }, [duplicates]);
+
   const filteredData = useMemo(() => {
     if (viewMode === "all" && allArticles.length > 0) {
       return { type: "articles", data: allArticles };
@@ -68,22 +77,16 @@ const ResultsTable: React.FC<ResultsTableProps> = ({
 
     if (viewMode === "clean") {
       if (allArticles.length > 0) {
-        const uniqueArticlesInDuplicates = new Set<string>();
-        duplicates.forEach(pair => {
-          uniqueArticlesInDuplicates.add(pair.article1.Doi);
-          uniqueArticlesInDuplicates.add(pair.article2.Doi);
-        });
-        
         return { 
           type: "articles", 
-          data: allArticles.filter(article => !uniqueArticlesInDuplicates.has(article.Doi)) 
+          data: allArticles.filter(article => !duplicateDoiSet.has(article.Doi)) 
         };
       }
       return { type: "articles", data: [] };
     }
 
     return { type: "duplicates", data: duplicates };
-  }, [viewMode, duplicates, allArticles]);
+  }, [viewMode, duplicates, allArticles, duplicateDoiSet]);
 
   const sortedData = useMemo(() => {
     let dataToSort = [...filteredData.data];
