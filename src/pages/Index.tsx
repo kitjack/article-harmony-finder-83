@@ -1,184 +1,77 @@
 
-import React, { useState, useCallback } from "react";
-import { toast } from "sonner";
-import FileUpload from "@/components/FileUpload";
-import ThresholdSlider from "@/components/ThresholdSlider";
-import ResultsTable from "@/components/ResultsTable";
-import CSVFormatGuide from "@/components/CSVFormatGuide";
-import DuplicateArticlesButton from "@/components/DuplicateArticlesButton";
-import Header from "@/components/Header";
-import { ArticleData, downloadCSV, generateSampleCSV } from "@/utils/csvUtils";
-import { DuplicatePair, findDuplicates, deduplicate } from "@/utils/fuzzyMatchUtils";
-import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import React from "react";
+import { useNavigate } from "react-router-dom";
+import { FileText, FileSpreadsheet } from "lucide-react";
 
 const Index: React.FC = () => {
-  const [articles, setArticles] = useState<ArticleData[]>([]);
-  const [threshold, setThreshold] = useState<number>(85);
-  const [duplicates, setDuplicates] = useState<DuplicatePair[]>([]);
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-
-  const handleFileLoaded = useCallback((data: ArticleData[]) => {
-    setArticles(data);
-    setDuplicates([]);
-    toast.success("CSV file loaded successfully!", {
-      description: `Loaded ${data.length} articles`,
-    });
-  }, []);
-
-  const handleError = useCallback((error: Error) => {
-    toast.error("Error processing file", {
-      description: error.message,
-    });
-  }, []);
-
-  const handleThresholdChange = useCallback((value: number) => {
-    setThreshold(value);
-    
-    // If we already have duplicates, recalculate based on new threshold
-    if (articles.length > 0 && duplicates.length > 0) {
-      const newDuplicates = findDuplicates(articles, value);
-      setDuplicates(newDuplicates);
-    }
-  }, [articles, duplicates]);
-
-  const handleDeduplicate = useCallback(async () => {
-    if (articles.length === 0) {
-      toast.error("No data to process", {
-        description: "Please upload a CSV file first",
-      });
-      return;
-    }
-
-    setIsProcessing(true);
-
-    try {
-      // Using setTimeout to ensure the UI updates for processing state
-      setTimeout(() => {
-        const newDuplicates = findDuplicates(articles, threshold);
-        setDuplicates(newDuplicates);
-        
-        if (newDuplicates.length === 0) {
-          toast.info("No duplicates found", {
-            description: "All articles appear to be unique based on current threshold"
-          });
-        } else {
-          toast.success("Duplicate analysis complete", {
-            description: `Found ${newDuplicates.length} potential duplicates`
-          });
-        }
-        
-        setIsProcessing(false);
-      }, 500);
-    } catch (error) {
-      setIsProcessing(false);
-      toast.error("Error during deduplication", {
-        description: error instanceof Error ? error.message : "Unknown error"
-      });
-    }
-  }, [articles, threshold]);
-
-  const handleDownloadDuplicates = useCallback(() => {
-    if (duplicates.length === 0) return;
-    
-    // Create a flattened array of duplicate pairs
-    const flatData = duplicates.map(pair => ({
-      "Title 1": pair.article1.Title,
-      "Doi 1": pair.article1.Doi,
-      "Title 2": pair.article2.Title,
-      "Doi 2": pair.article2.Doi,
-      "Similarity": `${pair.similarity}%`
-    }));
-    
-    downloadCSV(flatData, "duplicate-articles.csv");
-    toast.success("Duplicate pairs downloaded");
-  }, [duplicates]);
-
-  const handleDownloadDeduplicated = useCallback(() => {
-    if (articles.length === 0 || duplicates.length === 0) return;
-    
-    const deduplicatedData = deduplicate(articles, duplicates);
-    downloadCSV(deduplicatedData, "deduplicated-articles.csv");
-    
-    toast.success("Deduplicated dataset downloaded", {
-      description: `${articles.length - deduplicatedData.length} duplicates removed`
-    });
-  }, [articles, duplicates]);
-
-  const handleDownloadSample = useCallback(() => {
-    const csvContent = generateSampleCSV();
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
-    const url = window.URL.createObjectURL(blob);
-    
-    // Create a temporary link and trigger download
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "sample-articles.csv";
-    document.body.appendChild(a);
-    a.click();
-    
-    // Clean up
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-    
-    toast.success("Sample CSV downloaded");
-  }, []);
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-app-blue to-app-blue-light">
-      <div className="container mx-auto px-4 pb-16">
-        <Header />
-        
-        <div className="bg-white rounded-xl shadow-lg p-6 md:p-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">Upload Your CSV File</h2>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex items-center gap-1"
-                  onClick={handleDownloadSample}
-                >
-                  <Download className="h-4 w-4" />
-                  Sample CSV
-                </Button>
+      <div className="container mx-auto px-4 py-16">
+        <div className="text-center mb-16">
+          <h1 className="text-4xl font-bold text-white mb-4">
+            Smart Deduplication Solutions
+          </h1>
+          <p className="text-xl text-blue-100">
+            Choose the deduplication tool that best fits your needs
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          {/* Article Deduplication Card */}
+          <div
+            onClick={() => navigate("/articles")}
+            className="group cursor-pointer transform transition-all duration-300 hover:-translate-y-2"
+          >
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden h-full border-2 border-transparent hover:border-blue-300">
+              <div className="p-8">
+                <div className="w-16 h-16 bg-app-blue rounded-lg flex items-center justify-center mb-6 group-hover:bg-app-blue-dark transition-colors">
+                  <FileText className="w-8 h-8 text-white" />
+                </div>
+                <h3 className="text-2xl font-semibold text-gray-800 mb-4">
+                  Article Deduplication
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Specialized tool for academic and research articles. Intelligently matches
+                  similar titles and DOIs to identify duplicate entries.
+                </p>
+                <div className="flex items-center text-app-blue font-medium">
+                  Learn more
+                  <span className="ml-2 transform group-hover:translate-x-2 transition-transform">
+                    →
+                  </span>
+                </div>
               </div>
-              
-              <FileUpload 
-                onFileLoaded={handleFileLoaded} 
-                onError={handleError} 
-              />
-            </div>
-            
-            <div>
-              <h2 className="text-xl font-semibold mb-2">Configure Settings</h2>
-              <p className="text-gray-600 mb-4">
-                Adjust how similar titles need to be to count as duplicates
-              </p>
-              
-              <ThresholdSlider 
-                threshold={threshold} 
-                onChange={handleThresholdChange} 
-              />
-              
-              <DuplicateArticlesButton 
-                onClick={handleDeduplicate}
-                disabled={articles.length === 0}
-                isProcessing={isProcessing}
-              />
             </div>
           </div>
-          
-          <ResultsTable 
-            duplicates={duplicates}
-            onDownloadOriginal={handleDownloadDuplicates}
-            onDownloadDeduplicated={handleDownloadDeduplicated}
-            totalArticles={articles.length}
-            allArticles={articles}
-          />
-          
-          <CSVFormatGuide onDownloadSample={handleDownloadSample} />
+
+          {/* General Purpose Card */}
+          <div
+            onClick={() => navigate("/general")}
+            className="group cursor-pointer transform transition-all duration-300 hover:-translate-y-2"
+          >
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden h-full border-2 border-transparent hover:border-blue-300">
+              <div className="p-8">
+                <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center mb-6">
+                  <FileSpreadsheet className="w-8 h-8 text-white" />
+                </div>
+                <h3 className="text-2xl font-semibold text-gray-800 mb-4">
+                  General Purpose Deduplication
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Flexible deduplication tool for any CSV data. Customize your matching
+                  criteria and find duplicates across any columns.
+                </p>
+                <div className="flex items-center text-app-blue font-medium">
+                  Learn more
+                  <span className="ml-2 transform group-hover:translate-x-2 transition-transform">
+                    →
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
