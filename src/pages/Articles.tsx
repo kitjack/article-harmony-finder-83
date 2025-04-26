@@ -6,17 +6,18 @@ import ThresholdSlider from "@/components/ThresholdSlider";
 import ResultsTable from "@/components/ResultsTable";
 import CSVFormatGuide from "@/components/CSVFormatGuide";
 import DuplicateArticlesButton from "@/components/DuplicateArticlesButton";
-import Header from "@/components/Header";
 import { ArticleData, downloadCSV, generateSampleCSV } from "@/utils/csvUtils";
 import { DuplicatePair, findDuplicates, deduplicate } from "@/utils/fuzzyMatchUtils";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { ArrowLeft, Download, FileDigit, Coffee } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
-const Index: React.FC = () => {
+const Articles: React.FC = () => {
   const [articles, setArticles] = useState<ArticleData[]>([]);
   const [threshold, setThreshold] = useState<number>(85);
   const [duplicates, setDuplicates] = useState<DuplicatePair[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const navigate = useNavigate();
 
   const handleFileLoaded = useCallback((data: ArticleData[]) => {
     setArticles(data);
@@ -127,7 +128,38 @@ const Index: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-app-blue to-app-blue-light">
       <div className="container mx-auto px-4 pb-16">
-        <Header />
+        <div className="py-6">
+          <Button
+            variant="outline"
+            className="bg-white mb-6"
+            onClick={() => navigate("/")}
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Projects
+          </Button>
+          
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center cursor-pointer" onClick={() => navigate("/")}>
+              <FileDigit className="h-8 w-8 text-white mr-3" />
+              <div>
+                <h1 className="text-2xl font-bold text-white">Deduper</h1>
+                <p className="text-blue-100">Article Harmony</p>
+              </div>
+            </div>
+            
+            <Button
+              variant="outline"
+              className="bg-white hover:bg-gray-100 text-app-blue flex items-center gap-2"
+            >
+              <Coffee className="h-4 w-4" />
+              <span>Buy Me a Coffee</span>
+            </Button>
+          </div>
+          
+          <h2 className="text-xl md:text-2xl text-white font-light">
+            Deduplicate your article database with precision and ease
+          </h2>
+        </div>
         
         <div className="bg-white rounded-xl shadow-lg p-6 md:p-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -185,4 +217,4 @@ const Index: React.FC = () => {
   );
 };
 
-export default Index;
+export default Articles;
