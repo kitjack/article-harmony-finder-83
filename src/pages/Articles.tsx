@@ -40,8 +40,16 @@ const Articles: React.FC = () => {
     
     // If we already have duplicates, recalculate based on new threshold
     if (articles.length > 0 && duplicates.length > 0) {
-      const newDuplicates = findDuplicates(articles, value);
-      setDuplicates(newDuplicates);
+      // Fix: Handle the promise properly
+      findDuplicates(articles, value)
+        .then(newDuplicates => {
+          setDuplicates(newDuplicates);
+        })
+        .catch(error => {
+          toast.error("Error recalculating duplicates", {
+            description: error instanceof Error ? error.message : "Unknown error"
+          });
+        });
     }
   }, [articles, duplicates]);
 
@@ -57,13 +65,14 @@ const Articles: React.FC = () => {
     setProcessingProgress(0);
 
     try {
-      // Using the new chunked processing function
+      // Using the chunked processing function and properly awaiting the promise
       const newDuplicates = await findDuplicates(
         articles, 
         threshold,
         setProcessingProgress
       );
       
+      // Now we set the duplicates with the resolved value, not the promise
       setDuplicates(newDuplicates);
       
       if (newDuplicates.length === 0) {
