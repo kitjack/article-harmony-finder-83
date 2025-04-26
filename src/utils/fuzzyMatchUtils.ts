@@ -36,77 +36,96 @@ export const findDuplicates = async (
       onProgress?.(10);
       console.log(`Processing first ${maxArticlesPerRequest} articles out of ${totalArticles}`);
       
-      const response = await fetch('/.netlify/functions/processDuplicates', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          articles: firstChunk,
-          threshold,
-        }),
-      });
+      try {
+        const response = await fetch('/.netlify/functions/processDuplicates', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            articles: firstChunk,
+            threshold,
+          }),
+          // Add a longer timeout
+          signal: AbortSignal.timeout(25000), // 25 second timeout
+        });
 
-      onProgress?.(90);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorMessage;
+        onProgress?.(90);
         
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.message || errorData.error || 'Unknown server error';
-        } catch {
-          errorMessage = errorText || `Server error (${response.status})`;
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorMessage;
+          
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.message || errorData.error || 'Unknown server error';
+          } catch {
+            errorMessage = errorText || `Server error (${response.status})`;
+          }
+          
+          throw new Error(`Server processing failed: ${errorMessage}`);
+        }
+
+        const { duplicates, truncated } = await response.json();
+        allDuplicates.push(...duplicates);
+        
+        onProgress?.(100);
+        
+        if (truncated) {
+          console.warn(`Only processed first ${maxArticlesPerRequest} articles to prevent timeout. For complete results, try reducing your dataset.`);
         }
         
-        throw new Error(`Server processing failed: ${errorMessage}`);
+        return allDuplicates;
+      } catch (fetchError) {
+        // Handle timeout or network errors
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Server processing timed out. Try with a smaller dataset or higher threshold.');
+        }
+        throw fetchError;
       }
-
-      const { duplicates, truncated } = await response.json();
-      allDuplicates.push(...duplicates);
-      
-      onProgress?.(100);
-      
-      if (truncated) {
-        console.warn(`Only processed first ${maxArticlesPerRequest} articles to prevent timeout. For complete results, try reducing your dataset.`);
-      }
-      
-      return allDuplicates;
     } else {
       // Process all articles in one request if below threshold
       onProgress?.(20);
 
-      const response = await fetch('/.netlify/functions/processDuplicates', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          articles: validArticles,
-          threshold,
-        }),
-      });
+      try {
+        const response = await fetch('/.netlify/functions/processDuplicates', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            articles: validArticles,
+            threshold,
+          }),
+          signal: AbortSignal.timeout(25000), // 25 second timeout
+        });
 
-      onProgress?.(80);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorMessage;
+        onProgress?.(80);
         
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.message || errorData.error || 'Unknown server error';
-        } catch {
-          errorMessage = errorText || `Server error (${response.status})`;
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorMessage;
+          
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.message || errorData.error || 'Unknown server error';
+          } catch {
+            errorMessage = errorText || `Server error (${response.status})`;
+          }
+          
+          throw new Error(`Server processing failed: ${errorMessage}`);
         }
-        
-        throw new Error(`Server processing failed: ${errorMessage}`);
-      }
 
-      const { duplicates } = await response.json();
-      onProgress?.(100);
-      return duplicates;
+        const { duplicates } = await response.json();
+        onProgress?.(100);
+        return duplicates;
+      } catch (fetchError) {
+        // Handle timeout or network errors
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Server processing timed out. Try with a smaller dataset or higher threshold.');
+        }
+        throw fetchError;
+      }
     }
   } catch (error) {
     console.error("Error processing duplicates:", error);
