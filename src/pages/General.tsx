@@ -1,10 +1,10 @@
-
 import React, { useState, useCallback } from "react";
-import { ArrowLeft, FileSpreadsheet, FileDigit, Coffee, Download } from "lucide-react";
+import { ArrowLeft, FileDigit, Coffee, Download, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import FileUpload from "@/components/FileUpload";
 import ThresholdSlider from "@/components/ThresholdSlider";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import DuplicateArticlesButton from "@/components/DuplicateArticlesButton";
 import ResultsTable from "@/components/ResultsTable";
 import { toast } from "sonner";
@@ -23,21 +23,17 @@ const General: React.FC = () => {
   const handleFileLoaded = useCallback((loadedData: any[]) => {
     setData(loadedData);
     setDuplicates([]);
+    setSelectedColumns([]); // Reset selected columns when new file is loaded
 
     // Extract column names from the first row
     if (loadedData.length > 0) {
       const columns = Object.keys(loadedData[0]);
       setAvailableColumns(columns);
       
-      // By default, select the first column if available
-      if (columns.length > 0) {
-        setSelectedColumns([columns[0]]);
-      }
+      toast.success("CSV file loaded successfully!", {
+        description: `Found ${columns.length} columns and ${loadedData.length} records`,
+      });
     }
-
-    toast.success("CSV file loaded successfully!", {
-      description: `Loaded ${loadedData.length} records`,
-    });
   }, []);
 
   const handleError = useCallback((error: Error) => {
@@ -58,11 +54,21 @@ const General: React.FC = () => {
 
   const handleColumnToggle = useCallback((column: string) => {
     setSelectedColumns(prev => {
+      // If column is already selected, remove it
       if (prev.includes(column)) {
         return prev.filter(col => col !== column);
-      } else {
-        return [...prev, column];
       }
+      
+      // If trying to add more than 2 columns, show warning and don't add
+      if (prev.length >= 2) {
+        toast.warning("Column selection limit reached", {
+          description: "You can only select up to 2 columns for comparison"
+        });
+        return prev;
+      }
+      
+      // Add the new column
+      return [...prev, column];
     });
   }, []);
 
@@ -196,7 +202,10 @@ const General: React.FC = () => {
           </Button>
           
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center cursor-pointer" onClick={() => navigate("/")}>
+            <div 
+              className="flex items-center cursor-pointer" 
+              onClick={() => navigate("/")}
+            >
               <FileDigit className="h-8 w-8 text-white mr-3" />
               <div>
                 <h1 className="text-2xl font-bold text-white">
@@ -247,12 +256,18 @@ const General: React.FC = () => {
             <div>
               <h2 className="text-xl font-semibold mb-2">Configure Settings</h2>
               <p className="text-gray-600 mb-4">
-                Choose columns to compare and set similarity threshold
+                Select up to 2 columns to compare and set similarity threshold
               </p>
               
               {availableColumns.length > 0 && (
                 <div className="mb-6">
-                  <h3 className="font-medium mb-2">Select columns to compare:</h3>
+                  <Alert className="mb-4">
+                    <Search className="h-4 w-4" />
+                    <AlertDescription>
+                      Select 1-2 columns that contain the values you want to compare for finding duplicates
+                    </AlertDescription>
+                  </Alert>
+                  
                   <div className="flex flex-wrap gap-2">
                     {availableColumns.map(column => (
                       <Button
@@ -266,6 +281,10 @@ const General: React.FC = () => {
                       </Button>
                     ))}
                   </div>
+                  
+                  <p className="text-sm text-gray-500 mt-2">
+                    {selectedColumns.length}/2 columns selected
+                  </p>
                 </div>
               )}
               
