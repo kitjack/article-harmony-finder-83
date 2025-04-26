@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from "react";
 import { toast } from "sonner";
 import FileUpload from "@/components/FileUpload";
@@ -27,7 +26,6 @@ const Articles: React.FC = () => {
     setArticles(data);
     setDuplicates([]);
     
-    // Show warning for large files
     if (data.length > 500) {
       setShowSizeWarning(true);
       toast.warning("Large dataset detected", {
@@ -50,9 +48,7 @@ const Articles: React.FC = () => {
   const handleThresholdChange = useCallback((value: number) => {
     setThreshold(value);
     
-    // If we already have duplicates, recalculate based on new threshold
     if (articles.length > 0 && duplicates.length > 0) {
-      // Fix: Handle the promise properly
       findDuplicates(articles, value)
         .then(newDuplicates => {
           setDuplicates(newDuplicates);
@@ -77,14 +73,12 @@ const Articles: React.FC = () => {
     setProcessingProgress(0);
 
     try {
-      // Using the chunked processing function and properly awaiting the promise
       const newDuplicates = await findDuplicates(
         articles, 
         threshold,
         setProcessingProgress
       );
       
-      // Now we set the duplicates with the resolved value, not the promise
       setDuplicates(newDuplicates);
       
       if (newDuplicates.length === 0) {
@@ -111,7 +105,6 @@ const Articles: React.FC = () => {
   const handleDownloadDuplicates = useCallback(() => {
     if (duplicates.length === 0) return;
     
-    // Create a flattened array of duplicate pairs
     const flatData = duplicates.map(pair => ({
       "Title 1": pair.article1.Title,
       "Doi 1": pair.article1.Doi,
@@ -140,14 +133,12 @@ const Articles: React.FC = () => {
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
     const url = window.URL.createObjectURL(blob);
     
-    // Create a temporary link and trigger download
     const a = document.createElement("a");
     a.href = url;
     a.download = "sample-articles.csv";
     document.body.appendChild(a);
     a.click();
     
-    // Clean up
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
     
@@ -192,7 +183,7 @@ const Articles: React.FC = () => {
         
         <div className="bg-white rounded-xl shadow-lg p-6 md:p-8">
           {showSizeWarning && (
-            <Alert variant="warning" className="mb-6 bg-yellow-50 border-yellow-200">
+            <Alert variant="default" className="mb-6 bg-yellow-50 border-yellow-200">
               <AlertCircle className="h-4 w-4 text-yellow-700" />
               <AlertTitle className="text-yellow-800">Server Limitations</AlertTitle>
               <AlertDescription className="text-yellow-700">
