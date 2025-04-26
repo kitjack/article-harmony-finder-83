@@ -2,14 +2,16 @@
 import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { FileText, Copy, FileSearch, CheckCircle } from "lucide-react";
-import { DuplicatePair } from "@/utils/fuzzyMatchUtils";
+import { DuplicatePair as ArticleDuplicatePair } from "@/utils/fuzzyMatchUtils";
+import { DuplicatePair as GeneralDuplicatePair } from "@/utils/generalDuplicationUtils";
 import { cn } from "@/lib/utils";
 
 type ViewMode = "duplicates" | "exact" | "fuzzy" | "clean" | "all";
+type CombinedDuplicatePair = ArticleDuplicatePair | GeneralDuplicatePair;
 
 interface DeduplicationStatsProps {
   totalArticles: number;
-  duplicates: DuplicatePair[];
+  duplicates: CombinedDuplicatePair[];
   onCardClick?: (mode: ViewMode) => void;
   activeView?: ViewMode;
 }
@@ -26,17 +28,21 @@ const DeduplicationStats: React.FC<DeduplicationStatsProps> = ({
   // Count fuzzy duplicates (not 100% similarity)
   const fuzzyDuplicates = duplicates.filter((pair) => pair.similarity < 100).length;
   
-  // Create a set of unique articles that are in duplicate pairs
-  const articlesInDuplicates = new Set<string>();
+  // Create a set of unique records that are in duplicate pairs
+  const recordsInDuplicates = new Set<string | number>();
   
-  // For each duplicate pair, we only add the second article (the one that would be removed)
-  // This correctly counts only the duplicate articles, not all articles involved in pairs
+  // For each duplicate pair, we only add the second record (the one that would be removed)
   duplicates.forEach(pair => {
-    articlesInDuplicates.add(pair.article2.Doi);
+    if ('article2' in pair) {
+      recordsInDuplicates.add(pair.article2.Doi);
+    } else if ('record2' in pair) {
+      // For general records, use their index
+      recordsInDuplicates.add(pair.index2);
+    }
   });
   
-  // Clean records = total - articles that are duplicates
-  const cleanRecords = totalArticles - articlesInDuplicates.size;
+  // Clean records = total - records that are duplicates
+  const cleanRecords = totalArticles - recordsInDuplicates.size;
 
   const createCardClass = (mode: ViewMode) => {
     return cn(
@@ -54,7 +60,7 @@ const DeduplicationStats: React.FC<DeduplicationStatsProps> = ({
         <CardContent className="flex items-center p-6">
           <FileText className="h-8 w-8 text-app-blue mr-4" />
           <div>
-            <p className="text-sm text-gray-500">Total Articles</p>
+            <p className="text-sm text-gray-500">Total Records</p>
             <p className="text-2xl font-bold">{totalArticles}</p>
           </div>
         </CardContent>
