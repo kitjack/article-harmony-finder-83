@@ -1,6 +1,7 @@
 
 import React, { useState, useCallback } from "react";
-import { Upload, FileUp } from "lucide-react";
+import { Upload, FileUp, Loader } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 
 interface FileUploadProps {
   onFileLoaded: (data: any[]) => void;
@@ -13,6 +14,8 @@ const FileUpload: React.FC<FileUploadProps> = ({
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   const handleFileUpload = useCallback(async (file: File) => {
     try {
@@ -20,12 +23,23 @@ const FileUpload: React.FC<FileUploadProps> = ({
         throw new Error("Please upload a CSV file");
       }
       setFileName(file.name);
+      setIsProcessing(true);
+      setProgress(0);
 
       const { parseCSV } = await import("../utils/csvUtils");
-      const data = await parseCSV(file);
-      onFileLoaded(data);
+      const data = await parseCSV(file, (progressValue) => {
+        setProgress(progressValue);
+      });
+      
+      // Add a small delay to show 100% completion before finishing
+      setProgress(100);
+      setTimeout(() => {
+        setIsProcessing(false);
+        onFileLoaded(data);
+      }, 500);
     } catch (error) {
       setFileName(null);
+      setIsProcessing(false);
       onError(error instanceof Error ? error : new Error("Unknown error occurred"));
     }
   }, [onFileLoaded, onError]);
@@ -86,6 +100,21 @@ const FileUpload: React.FC<FileUploadProps> = ({
               <p className="text-sm text-gray-500">
                 Upload any CSV file with column headers
               </p>
+              <p className="text-xs text-gray-400 mt-2">
+                Large files will be processed in chunks to prevent browser freezing
+              </p>
+            </>
+          ) : isProcessing ? (
+            <>
+              <Loader className="w-12 h-12 text-app-blue mb-2 animate-spin" strokeWidth={1.5} />
+              <p className="text-lg font-medium text-app-blue">
+                Processing file...
+              </p>
+              <p className="text-sm text-gray-700">{fileName}</p>
+              <div className="w-full mt-4">
+                <Progress value={progress} className="h-2" />
+                <p className="text-xs text-gray-500 mt-1">{progress}% complete</p>
+              </div>
             </>
           ) : (
             <>

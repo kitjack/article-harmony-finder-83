@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { ArrowLeft, FileDigit, Coffee, Download, Search } from "lucide-react";
+import { ArrowLeft, FileDigit, Coffee, Download, Search, Loader } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import FileUpload from "@/components/FileUpload";
@@ -7,8 +7,9 @@ import ThresholdSlider from "@/components/ThresholdSlider";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import DuplicateArticlesButton from "@/components/DuplicateArticlesButton";
 import ResultsTable from "@/components/ResultsTable";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { findDuplicatesForGeneralData, DuplicatePair } from "@/utils/generalDuplicationUtils";
+import { findDuplicatesForGeneralData, DuplicatePair, deduplicateGeneralData } from "@/utils/generalDuplicationUtils";
 import { downloadCSV } from "@/utils/csvUtils";
 
 const General: React.FC = () => {
@@ -19,6 +20,7 @@ const General: React.FC = () => {
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [availableColumns, setAvailableColumns] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [processingProgress, setProcessingProgress] = useState<number>(0);
 
   const handleFileLoaded = useCallback((loadedData: any[]) => {
     setData(loadedData);
@@ -47,8 +49,21 @@ const General: React.FC = () => {
     
     // If we already have duplicates, recalculate based on new threshold
     if (data.length > 0 && duplicates.length > 0 && selectedColumns.length > 0) {
-      const newDuplicates = findDuplicatesForGeneralData(data, selectedColumns, value);
-      setDuplicates(newDuplicates);
+      setIsProcessing(true);
+      setProcessingProgress(0);
+      
+      findDuplicatesForGeneralData(data, selectedColumns, value, setProcessingProgress)
+        .then(newDuplicates => {
+          setDuplicates(newDuplicates);
+          setIsProcessing(false);
+          setProcessingProgress(100);
+        })
+        .catch(error => {
+          setIsProcessing(false);
+          toast.error("Error recalculating duplicates", {
+            description: error.message
+          });
+        });
     }
   }, [data, duplicates, selectedColumns]);
 
@@ -88,25 +103,31 @@ const General: React.FC = () => {
     }
 
     setIsProcessing(true);
+    setProcessingProgress(0);
 
     try {
-      // Using setTimeout to ensure the UI updates for processing state
-      setTimeout(() => {
-        const newDuplicates = findDuplicatesForGeneralData(data, selectedColumns, threshold);
-        setDuplicates(newDuplicates);
-        
-        if (newDuplicates.length === 0) {
-          toast.info("No duplicates found", {
-            description: "All records appear to be unique based on current threshold"
-          });
-        } else {
-          toast.success("Duplicate analysis complete", {
-            description: `Found ${newDuplicates.length} potential duplicates`
-          });
-        }
-        
-        setIsProcessing(false);
-      }, 500);
+      // Process with our new chunked processing function
+      const newDuplicates = await findDuplicatesForGeneralData(
+        data, 
+        selectedColumns, 
+        threshold,
+        setProcessingProgress
+      );
+      
+      setDuplicates(newDuplicates);
+      
+      if (newDuplicates.length === 0) {
+        toast.info("No duplicates found", {
+          description: "All records appear to be unique based on current threshold"
+        });
+      } else {
+        toast.success("Duplicate analysis complete", {
+          description: `Found ${newDuplicates.length} potential duplicates`
+        });
+      }
+      
+      setIsProcessing(false);
+      setProcessingProgress(100);
     } catch (error) {
       setIsProcessing(false);
       toast.error("Error during deduplication", {
@@ -138,14 +159,7 @@ const General: React.FC = () => {
   const handleDownloadDeduplicated = useCallback(() => {
     if (data.length === 0 || duplicates.length === 0) return;
     
-    // Create a set of indices to remove
-    const indicesToRemove = new Set<number>();
-    duplicates.forEach(pair => {
-      indicesToRemove.add(pair.index2);
-    });
-    
-    // Filter the original data to remove duplicates
-    const deduplicatedData = data.filter((_, index) => !indicesToRemove.has(index));
+    const deduplicatedData = deduplicateGeneralData(data, duplicates);
     
     downloadCSV(deduplicatedData, "deduplicated-data.csv");
     toast.success("Deduplicated dataset downloaded", {
@@ -293,12 +307,27 @@ const General: React.FC = () => {
                 onChange={handleThresholdChange} 
               />
               
-              <DuplicateArticlesButton 
-                onClick={handleDeduplicate}
-                disabled={data.length === 0 || selectedColumns.length === 0}
-                isProcessing={isProcessing}
-                buttonText="Find Duplicates"
-              />
+              {isProcessing ? (
+                <div className="mt-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Loader className="h-5 w-5 text-purple-600 animate-spin" />
+                    <span className="font-medium text-purple-600">
+                      Processing data in chunks...
+                    </span>
+                  </div>
+                  <Progress value={processingProgress} className="h-2" />
+                  <p className="text-xs text-gray-500 mt-2 text-center">
+                    {processingProgress}% complete
+                  </p>
+                </div>
+              ) : (
+                <DuplicateArticlesButton 
+                  onClick={handleDeduplicate}
+                  disabled={data.length === 0 || selectedColumns.length === 0}
+                  isProcessing={false}
+                  buttonText="Find Duplicates"
+                />
+              )}
             </div>
           </div>
           

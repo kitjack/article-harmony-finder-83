@@ -8,21 +8,92 @@ export interface ArticleData {
   [key: string]: string;
 }
 
-export const parseCSV = (file: File): Promise<ArticleData[]> => {
+export interface ParseProgressCallback {
+  (progress: number): void;
+}
+
+export const parseCSV = (file: File, onProgress?: ParseProgressCallback): Promise<ArticleData[]> => {
   return new Promise((resolve, reject) => {
-    Papa.parse<ArticleData>(file, {
+    const results: any[] = [];
+    
+    Papa.parse(file, {
       header: true,
-      complete: (results) => {
-        if (!results.data.some(item => "Title" in item && "Doi" in item)) {
+      dynamicTyping: true,
+      skipEmptyLines: true,
+      step: (row, parser) => {
+        if (row.data && Object.keys(row.data).length > 0) {
+          results.push(row.data);
+        }
+      },
+      complete: () => {
+        if (results.length === 0) {
+          reject(new Error("No valid data found in CSV"));
+          return;
+        }
+        
+        // For article-specific validation
+        if (file.name.includes("article") && !results.some(item => "Title" in item && "Doi" in item)) {
           reject(new Error("CSV must include 'Title' and 'Doi' columns"));
           return;
         }
-        resolve(results.data.filter(item => item.Title && item.Doi));
+        
+        resolve(results);
       },
       error: (error) => {
         reject(error);
+      },
+      chunkSize: 1024 * 1024 * 5, // 5MB chunks
+      worker: true,
+      chunk: (results, parser) => {
+        const totalRows = file.size / 50; // rough estimate of rows based on file size
+        const processedRows = results.data.length;
+        const progress = Math.min(Math.round((processedRows / totalRows) * 100), 99);
+        
+        if (onProgress) {
+          onProgress(progress);
+        }
       }
     });
+  });
+};
+
+// For processing large datasets in chunks
+export const processInChunks = <T, R>(
+  items: T[],
+  processFn: (chunk: T[]) => R[],
+  chunkSize = 1000,
+  onProgress?: (progress: number) => void
+): Promise<R[]> => {
+  return new Promise((resolve) => {
+    const chunks = Math.ceil(items.length / chunkSize);
+    let processedChunks = 0;
+    let results: R[] = [];
+    
+    const processNextChunk = () => {
+      if (processedChunks >= chunks) {
+        resolve(results);
+        return;
+      }
+      
+      const start = processedChunks * chunkSize;
+      const end = Math.min(start + chunkSize, items.length);
+      const chunk = items.slice(start, end);
+      
+      // Use setTimeout to prevent UI blocking
+      setTimeout(() => {
+        const chunkResults = processFn(chunk);
+        results = results.concat(chunkResults);
+        processedChunks++;
+        
+        if (onProgress) {
+          onProgress(Math.round((processedChunks / chunks) * 100));
+        }
+        
+        processNextChunk();
+      }, 0);
+    };
+    
+    processNextChunk();
   });
 };
 

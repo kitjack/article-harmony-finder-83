@@ -6,10 +6,11 @@ import ThresholdSlider from "@/components/ThresholdSlider";
 import ResultsTable from "@/components/ResultsTable";
 import CSVFormatGuide from "@/components/CSVFormatGuide";
 import DuplicateArticlesButton from "@/components/DuplicateArticlesButton";
+import { Progress } from "@/components/ui/progress";
 import { ArticleData, downloadCSV, generateSampleCSV } from "@/utils/csvUtils";
 import { DuplicatePair, findDuplicates, deduplicate } from "@/utils/fuzzyMatchUtils";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Download, FileDigit, Coffee } from "lucide-react";
+import { ArrowLeft, Download, FileDigit, Coffee, Loader } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const Articles: React.FC = () => {
@@ -17,6 +18,7 @@ const Articles: React.FC = () => {
   const [threshold, setThreshold] = useState<number>(85);
   const [duplicates, setDuplicates] = useState<DuplicatePair[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [processingProgress, setProcessingProgress] = useState<number>(0);
   const navigate = useNavigate();
 
   const handleFileLoaded = useCallback((data: ArticleData[]) => {
@@ -52,25 +54,30 @@ const Articles: React.FC = () => {
     }
 
     setIsProcessing(true);
+    setProcessingProgress(0);
 
     try {
-      // Using setTimeout to ensure the UI updates for processing state
-      setTimeout(() => {
-        const newDuplicates = findDuplicates(articles, threshold);
-        setDuplicates(newDuplicates);
-        
-        if (newDuplicates.length === 0) {
-          toast.info("No duplicates found", {
-            description: "All articles appear to be unique based on current threshold"
-          });
-        } else {
-          toast.success("Duplicate analysis complete", {
-            description: `Found ${newDuplicates.length} potential duplicates`
-          });
-        }
-        
-        setIsProcessing(false);
-      }, 500);
+      // Using the new chunked processing function
+      const newDuplicates = await findDuplicates(
+        articles, 
+        threshold,
+        setProcessingProgress
+      );
+      
+      setDuplicates(newDuplicates);
+      
+      if (newDuplicates.length === 0) {
+        toast.info("No duplicates found", {
+          description: "All articles appear to be unique based on current threshold"
+        });
+      } else {
+        toast.success("Duplicate analysis complete", {
+          description: `Found ${newDuplicates.length} potential duplicates`
+        });
+      }
+      
+      setIsProcessing(false);
+      setProcessingProgress(100);
     } catch (error) {
       setIsProcessing(false);
       toast.error("Error during deduplication", {
@@ -194,11 +201,26 @@ const Articles: React.FC = () => {
                 onChange={handleThresholdChange} 
               />
               
-              <DuplicateArticlesButton 
-                onClick={handleDeduplicate}
-                disabled={articles.length === 0}
-                isProcessing={isProcessing}
-              />
+              {isProcessing ? (
+                <div className="mt-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Loader className="h-5 w-5 text-app-blue animate-spin" />
+                    <span className="font-medium text-app-blue">
+                      Processing data in chunks...
+                    </span>
+                  </div>
+                  <Progress value={processingProgress} className="h-2" />
+                  <p className="text-xs text-gray-500 mt-2 text-center">
+                    {processingProgress}% complete
+                  </p>
+                </div>
+              ) : (
+                <DuplicateArticlesButton 
+                  onClick={handleDeduplicate}
+                  disabled={articles.length === 0}
+                  isProcessing={false}
+                />
+              )}
             </div>
           </div>
           

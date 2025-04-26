@@ -1,73 +1,98 @@
 
 import Fuse from "fuse.js";
-import { ArticleData } from "./csvUtils";
+import { ArticleData, processInChunks } from "./csvUtils";
 
 export interface DuplicatePair {
   article1: ArticleData;
   article2: ArticleData;
+  index1: number;
+  index2: number;
   similarity: number;
 }
 
-export const findDuplicates = (
-  data: ArticleData[],
-  threshold: number
-): DuplicatePair[] => {
-  const duplicates: DuplicatePair[] = [];
-  const normalizedThreshold = threshold / 100; // Convert percentage to decimal
+export const findDuplicates = async (
+  articles: ArticleData[], 
+  threshold: number,
+  onProgress?: (progress: number) => void
+): Promise<DuplicatePair[]> => {
+  if (articles.length === 0) return [];
 
-  // Configure Fuse.js options
+  // Create an array of all possible pairs to check
+  const totalPairs = []
+  for (let i = 0; i < articles.length; i++) {
+    for (let j = i + 1; j < articles.length; j++) {
+      totalPairs.push([i, j]);
+    }
+  }
+
+  // Config for Fuse
   const options = {
     includeScore: true,
     keys: ["Title"],
-    threshold: 1.0 - normalizedThreshold, // Fuse uses distance, not similarity
+    threshold: 0.4,
+    ignoreLocation: true
   };
 
-  // Compare each article with every other article
-  for (let i = 0; i < data.length; i++) {
-    const article1 = data[i];
+  // For small datasets, process directly
+  if (articles.length < 500) {
+    return findDuplicatesDirectly(articles, totalPairs, options, threshold);
+  }
+
+  // For large datasets, process in chunks
+  return processInChunks(
+    totalPairs,
+    (chunk) => findDuplicatesDirectly(articles, chunk, options, threshold),
+    5000, // Process 5000 pairs at a time
+    onProgress
+  );
+};
+
+const findDuplicatesDirectly = (
+  articles: ArticleData[],
+  pairs: number[][],
+  fuseOptions: any,
+  threshold: number
+): DuplicatePair[] => {
+  const fuse = new Fuse(articles, fuseOptions);
+  const duplicates: DuplicatePair[] = [];
+
+  for (const [i, j] of pairs) {
+    const article1 = articles[i];
+    const article2 = articles[j];
     
-    // Create a fuse instance with all articles except the current one
-    const fuse = new Fuse(
-      data.filter((_, index) => index > i), // Only check articles we haven't compared yet
-      options
-    );
-
-    // Search for possible duplicates
-    const results = fuse.search(article1.Title);
-
-    // Process results
-    for (const result of results) {
-      const article2 = result.item;
-      const score = result.score || 0;
-      const similarity = Math.round((1 - score) * 100); // Convert to percentage
+    // Skip if either article is undefined
+    if (!article1 || !article2) continue;
+    
+    // Calculate similarity using Fuse search
+    const searchResult = fuse.search(article1);
+    const matchResult = searchResult.find(result => result.refIndex === j);
+    
+    if (matchResult) {
+      // Convert Fuse score (0-1 where 0 is perfect match) to similarity percentage
+      const similarity = Math.round((1 - (matchResult.score || 0)) * 100);
       
-      // Only include pairs that meet our threshold
       if (similarity >= threshold) {
         duplicates.push({
           article1,
           article2,
+          index1: i,
+          index2: j,
           similarity
         });
       }
     }
   }
 
-  // Sort duplicates by similarity (highest first)
-  return duplicates.sort((a, b) => b.similarity - a.similarity);
+  return duplicates;
 };
 
 export const deduplicate = (
-  data: ArticleData[],
+  articles: ArticleData[],
   duplicates: DuplicatePair[]
 ): ArticleData[] => {
-  // Create a set of DOIs to remove (only article2 from each pair)
-  const doisToRemove = new Set<string>();
+  // Get indices of articles to remove (the duplicates)
+  const indicesToRemove = new Set(duplicates.map(pair => pair.index2));
   
-  // For each duplicate pair, mark the second article for removal
-  for (const pair of duplicates) {
-    doisToRemove.add(pair.article2.Doi);
-  }
-  
-  // Filter the original data to remove duplicates
-  return data.filter((article) => !doisToRemove.has(article.Doi));
+  // Filter out the duplicates
+  return articles.filter((_, index) => !indicesToRemove.has(index));
 };
