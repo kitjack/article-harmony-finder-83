@@ -1,4 +1,3 @@
-
 import { Handler } from '@netlify/functions';
 import Fuse from 'fuse.js';
 
@@ -26,37 +25,47 @@ const findDuplicatesInChunk = (
     ignoreLocation: true
   }
 ): DuplicatePair[] => {
-  const duplicates: DuplicatePair[] = [];
-  const fuse = new Fuse(articles, fuseOptions);
+  try {
+    const duplicates: DuplicatePair[] = [];
+    
+    const fuse = new Fuse(articles, fuseOptions);
 
-  for (let i = 0; i < articles.length; i++) {
-    for (let j = i + 1; j < articles.length; j++) {
+    const maxComparisons = Math.min(articles.length, 1000);
+    
+    for (let i = 0; i < maxComparisons; i++) {
       const article1 = articles[i];
-      const article2 = articles[j];
-
-      if (!article1?.Title || !article2?.Title) continue;
-
+      if (!article1?.Title) continue;
+      
       const searchResult = fuse.search(article1.Title);
-      const matchResult = searchResult.find(result => 
-        articles[result.refIndex] === article2
-      );
-
-      if (matchResult && matchResult.score !== undefined) {
-        const similarity = Math.round((1 - matchResult.score) * 100);
-        if (similarity >= threshold) {
-          duplicates.push({
-            article1,
-            article2,
-            index1: i,
-            index2: j,
-            similarity
-          });
+      
+      const filteredResults = searchResult
+        .filter(result => {
+          const article2 = articles[result.refIndex];
+          return result.refIndex > i && article2?.Title;
+        })
+        .slice(0, 50);
+      
+      for (const match of filteredResults) {
+        if (match.score !== undefined) {
+          const similarity = Math.round((1 - match.score) * 100);
+          if (similarity >= threshold) {
+            duplicates.push({
+              article1,
+              article2: articles[match.refIndex],
+              index1: i,
+              index2: match.refIndex,
+              similarity
+            });
+          }
         }
       }
     }
+    
+    return duplicates;
+  } catch (error) {
+    console.error("Error in findDuplicatesInChunk:", error);
+    throw error;
   }
-
-  return duplicates;
 };
 
 export const handler: Handler = async (event) => {
@@ -68,26 +77,68 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    const { articles, threshold } = JSON.parse(event.body || '{}');
-
-    if (!articles || !Array.isArray(articles) || !threshold) {
+    let parsedBody;
+    try {
+      parsedBody = JSON.parse(event.body || '{}');
+    } catch (parseError) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: 'Invalid input' }),
+        body: JSON.stringify({ 
+          error: 'Invalid JSON in request body',
+          details: parseError instanceof Error ? parseError.message : 'Unknown parsing error'
+        }),
       };
     }
 
-    const duplicates = findDuplicatesInChunk(articles, threshold);
+    const { articles, threshold } = parsedBody;
+
+    if (!articles || !Array.isArray(articles)) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ 
+          error: 'Invalid input: articles must be an array',
+          received: typeof articles
+        }),
+      };
+    }
+
+    if (threshold === undefined || isNaN(Number(threshold))) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ 
+          error: 'Invalid input: threshold must be a number',
+          received: threshold
+        }),
+      };
+    }
+
+    const maxArticles = 500;
+    const processableArticles = articles.slice(0, maxArticles);
+    
+    if (articles.length > maxArticles) {
+      console.log(`Processing truncated to ${maxArticles} articles from ${articles.length} total`);
+    }
+
+    const duplicates = findDuplicatesInChunk(processableArticles, Number(threshold));
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ duplicates }),
+      body: JSON.stringify({ 
+        duplicates,
+        processed: processableArticles.length,
+        total: articles.length,
+        truncated: articles.length > maxArticles
+      }),
     };
   } catch (error) {
+    console.error("Server processing error:", error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Internal server error' }),
+      body: JSON.stringify({ 
+        error: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      }),
     };
   }
 };
-

@@ -9,3 +9,14 @@
   to = "/index.html"
   status = 200
 
+[functions]
+  # Configure higher memory and timeout
+  node_bundler = "esbuild"
+  included_files = []
+  external_node_modules = []
+
+[functions.processDuplicates]
+  # These values need to be set in your Netlify dashboard
+  # as the file-level config has limited effect
+  memory = 1024 # MB
+  timeout = 30 # seconds

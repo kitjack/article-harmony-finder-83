@@ -10,8 +10,9 @@ import { Progress } from "@/components/ui/progress";
 import { ArticleData, downloadCSV, generateSampleCSV } from "@/utils/csvUtils";
 import { DuplicatePair, findDuplicates, deduplicate } from "@/utils/fuzzyMatchUtils";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Download, FileDigit, Coffee, Loader } from "lucide-react";
+import { ArrowLeft, Download, FileDigit, Coffee, Loader, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const Articles: React.FC = () => {
   const [articles, setArticles] = useState<ArticleData[]>([]);
@@ -19,14 +20,25 @@ const Articles: React.FC = () => {
   const [duplicates, setDuplicates] = useState<DuplicatePair[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [processingProgress, setProcessingProgress] = useState<number>(0);
+  const [showSizeWarning, setShowSizeWarning] = useState<boolean>(false);
   const navigate = useNavigate();
 
   const handleFileLoaded = useCallback((data: ArticleData[]) => {
     setArticles(data);
     setDuplicates([]);
-    toast.success("CSV file loaded successfully!", {
-      description: `Loaded ${data.length} articles`,
-    });
+    
+    // Show warning for large files
+    if (data.length > 500) {
+      setShowSizeWarning(true);
+      toast.warning("Large dataset detected", {
+        description: "Only the first 500 records will be processed to prevent timeouts",
+      });
+    } else {
+      setShowSizeWarning(false);
+      toast.success("CSV file loaded successfully!", {
+        description: `Loaded ${data.length} articles`,
+      });
+    }
   }, []);
 
   const handleError = useCallback((error: Error) => {
@@ -89,6 +101,7 @@ const Articles: React.FC = () => {
       setProcessingProgress(100);
     } catch (error) {
       setIsProcessing(false);
+      setProcessingProgress(0);
       toast.error("Error during deduplication", {
         description: error instanceof Error ? error.message : "Unknown error"
       });
@@ -178,6 +191,17 @@ const Articles: React.FC = () => {
         </div>
         
         <div className="bg-white rounded-xl shadow-lg p-6 md:p-8">
+          {showSizeWarning && (
+            <Alert variant="warning" className="mb-6 bg-yellow-50 border-yellow-200">
+              <AlertCircle className="h-4 w-4 text-yellow-700" />
+              <AlertTitle className="text-yellow-800">Server Limitations</AlertTitle>
+              <AlertDescription className="text-yellow-700">
+                To prevent server timeouts, only the first 500 records will be processed. 
+                For complete deduplication of large datasets, consider splitting your CSV file.
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
               <div className="flex justify-between items-center mb-4">
@@ -215,7 +239,7 @@ const Articles: React.FC = () => {
                   <div className="flex items-center gap-3 mb-3">
                     <Loader className="h-5 w-5 text-app-blue animate-spin" />
                     <span className="font-medium text-app-blue">
-                      Processing data in chunks...
+                      Processing data on server...
                     </span>
                   </div>
                   <Progress value={processingProgress} className="h-2" />

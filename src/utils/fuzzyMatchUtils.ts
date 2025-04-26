@@ -1,3 +1,4 @@
+
 import { ArticleData } from "./csvUtils";
 
 export interface DuplicatePair {
@@ -23,27 +24,90 @@ export const findDuplicates = async (
   if (validArticles.length === 0) return [];
 
   try {
-    // Send data to Netlify function
-    onProgress?.(50); // Show some progress while we wait for the server
+    // For large datasets, process in chunks and show warning
+    const maxArticlesPerRequest = 500;
+    const totalArticles = validArticles.length;
+    const allDuplicates: DuplicatePair[] = [];
+    
+    if (totalArticles > maxArticlesPerRequest) {
+      // Process the first chunk only for now
+      const firstChunk = validArticles.slice(0, maxArticlesPerRequest);
+      
+      onProgress?.(10);
+      console.log(`Processing first ${maxArticlesPerRequest} articles out of ${totalArticles}`);
+      
+      const response = await fetch('/.netlify/functions/processDuplicates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          articles: firstChunk,
+          threshold,
+        }),
+      });
 
-    const response = await fetch('/.netlify/functions/processDuplicates', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        articles: validArticles,
-        threshold,
-      }),
-    });
+      onProgress?.(90);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage;
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.message || errorData.error || 'Unknown server error';
+        } catch {
+          errorMessage = errorText || `Server error (${response.status})`;
+        }
+        
+        throw new Error(`Server processing failed: ${errorMessage}`);
+      }
 
-    if (!response.ok) {
-      throw new Error('Server processing failed');
+      const { duplicates, truncated } = await response.json();
+      allDuplicates.push(...duplicates);
+      
+      onProgress?.(100);
+      
+      if (truncated) {
+        console.warn(`Only processed first ${maxArticlesPerRequest} articles to prevent timeout. For complete results, try reducing your dataset.`);
+      }
+      
+      return allDuplicates;
+    } else {
+      // Process all articles in one request if below threshold
+      onProgress?.(20);
+
+      const response = await fetch('/.netlify/functions/processDuplicates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          articles: validArticles,
+          threshold,
+        }),
+      });
+
+      onProgress?.(80);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage;
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.message || errorData.error || 'Unknown server error';
+        } catch {
+          errorMessage = errorText || `Server error (${response.status})`;
+        }
+        
+        throw new Error(`Server processing failed: ${errorMessage}`);
+      }
+
+      const { duplicates } = await response.json();
+      onProgress?.(100);
+      return duplicates;
     }
-
-    const { duplicates } = await response.json();
-    onProgress?.(100);
-    return duplicates;
   } catch (error) {
     console.error("Error processing duplicates:", error);
     throw error;
