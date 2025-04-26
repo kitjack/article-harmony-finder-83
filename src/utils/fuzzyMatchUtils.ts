@@ -53,33 +53,50 @@ const findDuplicatesDirectly = (
   fuseOptions: any,
   threshold: number
 ): DuplicatePair[] => {
-  const fuse = new Fuse(articles, fuseOptions);
+  // Create a defensive copy of articles to ensure we're working with valid data
+  const validArticles = articles.filter(article => 
+    article && typeof article === 'object' && 'Title' in article
+  );
+  
+  // Initialize Fuse with the valid articles
+  const fuse = new Fuse(validArticles, fuseOptions);
   const duplicates: DuplicatePair[] = [];
 
   for (const [i, j] of pairs) {
-    const article1 = articles[i];
-    const article2 = articles[j];
+    // Get the actual articles using the indices
+    const article1 = validArticles[i];
+    const article2 = validArticles[j];
     
-    // Skip if either article is undefined
-    if (!article1 || !article2) continue;
+    // Skip if either article is undefined or doesn't have required properties
+    if (!article1 || !article2 || !article1.Title || !article2.Title) continue;
     
-    // Calculate similarity using Fuse search
-    const searchResult = fuse.search(article1);
-    const matchResult = searchResult.find(result => result.refIndex === j);
-    
-    if (matchResult) {
-      // Convert Fuse score (0-1 where 0 is perfect match) to similarity percentage
-      const similarity = Math.round((1 - (matchResult.score || 0)) * 100);
+    try {
+      // Calculate similarity using Fuse search
+      const searchResult = fuse.search(article1.Title);
+      const matchResult = searchResult.find(result => {
+        // Map the refIndex back to the original array index
+        const originalArticle = validArticles[result.refIndex];
+        return originalArticle === article2;
+      });
       
-      if (similarity >= threshold) {
-        duplicates.push({
-          article1,
-          article2,
-          index1: i,
-          index2: j,
-          similarity
-        });
+      if (matchResult) {
+        // Convert Fuse score (0-1 where 0 is perfect match) to similarity percentage
+        const similarity = Math.round((1 - (matchResult.score || 0)) * 100);
+        
+        if (similarity >= threshold) {
+          duplicates.push({
+            article1,
+            article2,
+            index1: i,
+            index2: j,
+            similarity
+          });
+        }
       }
+    } catch (error) {
+      console.error("Error comparing articles:", error);
+      // Continue with next pair if there's an error
+      continue;
     }
   }
 

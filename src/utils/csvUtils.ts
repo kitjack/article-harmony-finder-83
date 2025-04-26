@@ -15,14 +15,31 @@ export interface ParseProgressCallback {
 export const parseCSV = (file: File, onProgress?: ParseProgressCallback): Promise<ArticleData[]> => {
   return new Promise((resolve, reject) => {
     const results: any[] = [];
+    let hasHeaderRow = false;
     
     Papa.parse(file, {
       header: true,
       dynamicTyping: true,
       skipEmptyLines: true,
       step: (row, parser) => {
-        if (row.data && Object.keys(row.data).length > 0) {
-          results.push(row.data);
+        if (!hasHeaderRow) {
+          hasHeaderRow = true;
+          return;
+        }
+        
+        if (row.data && typeof row.data === 'object' && Object.keys(row.data).length > 0) {
+          // Ensure all values are strings to prevent type errors during comparisons
+          const sanitizedRow: any = {};
+          Object.entries(row.data).forEach(([key, value]) => {
+            if (value === null || value === undefined) {
+              sanitizedRow[key] = "";
+            } else if (typeof value === 'object') {
+              sanitizedRow[key] = JSON.stringify(value);
+            } else {
+              sanitizedRow[key] = String(value);
+            }
+          });
+          results.push(sanitizedRow);
         }
       },
       complete: () => {
@@ -69,8 +86,16 @@ export const processInChunks = <T, R>(
     let processedChunks = 0;
     let results: R[] = [];
     
+    // If there are no items, resolve immediately
+    if (items.length === 0) {
+      if (onProgress) onProgress(100);
+      resolve([]);
+      return;
+    }
+    
     const processNextChunk = () => {
       if (processedChunks >= chunks) {
+        if (onProgress) onProgress(100);
         resolve(results);
         return;
       }
@@ -79,18 +104,36 @@ export const processInChunks = <T, R>(
       const end = Math.min(start + chunkSize, items.length);
       const chunk = items.slice(start, end);
       
-      // Use setTimeout to prevent UI blocking
-      setTimeout(() => {
-        const chunkResults = processFn(chunk);
-        results = results.concat(chunkResults);
+      try {
+        // Use setTimeout to prevent UI blocking
+        setTimeout(() => {
+          try {
+            const chunkResults = processFn(chunk);
+            results = results.concat(chunkResults);
+            processedChunks++;
+            
+            if (onProgress) {
+              onProgress(Math.round((processedChunks / chunks) * 100));
+            }
+            
+            processNextChunk();
+          } catch (error) {
+            console.error("Error processing chunk:", error);
+            processedChunks++;
+            if (onProgress) {
+              onProgress(Math.round((processedChunks / chunks) * 100));
+            }
+            processNextChunk();
+          }
+        }, 0);
+      } catch (error) {
+        console.error("Error scheduling chunk processing:", error);
         processedChunks++;
-        
         if (onProgress) {
           onProgress(Math.round((processedChunks / chunks) * 100));
         }
-        
         processNextChunk();
-      }, 0);
+      }
     };
     
     processNextChunk();

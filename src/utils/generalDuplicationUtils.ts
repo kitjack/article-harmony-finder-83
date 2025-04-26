@@ -54,37 +54,61 @@ const findDuplicatesDirectly = (
   fuseOptions: any,
   threshold: number
 ): DuplicatePair[] => {
-  const fuse = new Fuse(data, fuseOptions);
-  const duplicates: DuplicatePair[] = [];
+  // Filter out invalid records to ensure we're working with valid data
+  const validData = data.filter(record => record && typeof record === 'object');
+  
+  try {
+    // Initialize Fuse with the filtered data
+    const fuse = new Fuse(validData, fuseOptions);
+    const duplicates: DuplicatePair[] = [];
 
-  for (const [i, j] of pairs) {
-    const record1 = data[i];
-    const record2 = data[j];
-    
-    // Skip if either record is undefined
-    if (!record1 || !record2) continue;
-    
-    // Calculate similarity using Fuse search
-    const searchResult = fuse.search(record1);
-    const matchResult = searchResult.find(result => result.refIndex === j);
-    
-    if (matchResult) {
-      // Convert Fuse score (0-1 where 0 is perfect match) to similarity percentage
-      const similarity = Math.round((1 - (matchResult.score || 0)) * 100);
-      
-      if (similarity >= threshold) {
-        duplicates.push({
-          record1,
-          record2,
-          index1: i,
-          index2: j,
-          similarity
+    for (const [i, j] of pairs) {
+      try {
+        const record1 = validData[i];
+        const record2 = validData[j];
+        
+        // Skip if either record is undefined
+        if (!record1 || !record2) continue;
+        
+        // For each selected column, check if it exists on both records
+        const allColumnsValid = fuseOptions.keys.every((key: string) => 
+          record1[key] !== undefined && record2[key] !== undefined
+        );
+        
+        if (!allColumnsValid) continue;
+        
+        // Calculate similarity using Fuse search
+        const searchResult = fuse.search(record1);
+        const matchResult = searchResult.find(result => {
+          const matchedRecord = validData[result.refIndex];
+          return matchedRecord === record2;
         });
+        
+        if (matchResult) {
+          // Convert Fuse score (0-1 where 0 is perfect match) to similarity percentage
+          const similarity = Math.round((1 - (matchResult.score || 0)) * 100);
+          
+          if (similarity >= threshold) {
+            duplicates.push({
+              record1,
+              record2,
+              index1: i,
+              index2: j,
+              similarity
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error comparing records:", error);
+        continue;
       }
     }
-  }
 
-  return duplicates;
+    return duplicates;
+  } catch (error) {
+    console.error("Error in duplicate detection:", error);
+    return [];
+  }
 };
 
 export const deduplicateGeneralData = (
