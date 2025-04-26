@@ -17,10 +17,17 @@ export const findDuplicates = async (
 ): Promise<DuplicatePair[]> => {
   if (articles.length === 0) return [];
 
+  // Validate articles first to ensure all have required data
+  const validArticles = articles.filter(article => 
+    article && typeof article === 'object' && 'Title' in article && article.Title
+  );
+
+  if (validArticles.length === 0) return [];
+
   // Create an array of all possible pairs to check
   const totalPairs = []
-  for (let i = 0; i < articles.length; i++) {
-    for (let j = i + 1; j < articles.length; j++) {
+  for (let i = 0; i < validArticles.length; i++) {
+    for (let j = i + 1; j < validArticles.length; j++) {
       totalPairs.push([i, j]);
     }
   }
@@ -33,18 +40,31 @@ export const findDuplicates = async (
     ignoreLocation: true
   };
 
+  // Adjust chunk size based on dataset size
+  const chunkSize = validArticles.length > 5000 ? 1000 : 5000;
+
   // For small datasets, process directly
-  if (articles.length < 500) {
-    return findDuplicatesDirectly(articles, totalPairs, options, threshold);
+  if (validArticles.length < 300) {
+    try {
+      return findDuplicatesDirectly(validArticles, totalPairs, options, threshold);
+    } catch (error) {
+      console.error("Error finding duplicates directly:", error);
+      return [];
+    }
   }
 
   // For large datasets, process in chunks
-  return processInChunks(
-    totalPairs,
-    (chunk) => findDuplicatesDirectly(articles, chunk, options, threshold),
-    5000, // Process 5000 pairs at a time
-    onProgress
-  );
+  try {
+    return processInChunks(
+      totalPairs,
+      (chunk) => findDuplicatesDirectly(validArticles, chunk, options, threshold),
+      chunkSize,
+      onProgress
+    );
+  } catch (error) {
+    console.error("Error processing in chunks:", error);
+    return [];
+  }
 };
 
 const findDuplicatesDirectly = (
@@ -55,33 +75,58 @@ const findDuplicatesDirectly = (
 ): DuplicatePair[] => {
   // Create a defensive copy of articles to ensure we're working with valid data
   const validArticles = articles.filter(article => 
-    article && typeof article === 'object' && 'Title' in article
+    article && typeof article === 'object' && 'Title' in article && article.Title
   );
   
+  if (validArticles.length === 0) {
+    return [];
+  }
+
   // Initialize Fuse with the valid articles
-  const fuse = new Fuse(validArticles, fuseOptions);
+  let fuse: Fuse<any>;
+  try {
+    fuse = new Fuse(validArticles, fuseOptions);
+  } catch (error) {
+    console.error("Error initializing Fuse:", error);
+    return [];
+  }
+
   const duplicates: DuplicatePair[] = [];
 
   for (const [i, j] of pairs) {
+    // Skip invalid indices
+    if (i >= validArticles.length || j >= validArticles.length || i < 0 || j < 0) {
+      continue;
+    }
+
     // Get the actual articles using the indices
     const article1 = validArticles[i];
     const article2 = validArticles[j];
     
     // Skip if either article is undefined or doesn't have required properties
-    if (!article1 || !article2 || !article1.Title || !article2.Title) continue;
+    if (!article1 || !article2 || !article1.Title || !article2.Title) {
+      continue;
+    }
     
     try {
       // Calculate similarity using Fuse search
-      const searchResult = fuse.search(article1.Title);
+      const searchResult = fuse.search(String(article1.Title));
+      
+      // Find the matching article in the search results
       const matchResult = searchResult.find(result => {
+        // Check if refIndex is valid
+        if (result.refIndex === undefined || result.refIndex >= validArticles.length) {
+          return false;
+        }
+        
         // Map the refIndex back to the original array index
         const originalArticle = validArticles[result.refIndex];
         return originalArticle === article2;
       });
       
-      if (matchResult) {
+      if (matchResult && matchResult.score !== undefined) {
         // Convert Fuse score (0-1 where 0 is perfect match) to similarity percentage
-        const similarity = Math.round((1 - (matchResult.score || 0)) * 100);
+        const similarity = Math.round((1 - matchResult.score) * 100);
         
         if (similarity >= threshold) {
           duplicates.push({
